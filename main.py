@@ -1,6 +1,6 @@
 import datetime
 
-from flask import Flask, render_template, flash, redirect, url_for, session
+from flask import Flask, render_template, Blueprint, flash, redirect, url_for, session
 from flask.views import View
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -21,6 +21,13 @@ tags = db.Table('post_tags',
                 db.Column('post_id', db.Integer, db.ForeignKey('post.id')),
                 db.Column('tag_id', db.Integer, db.ForeignKey('tag.id')),
                 )
+
+blog_blueprint = Blueprint(
+    'blog',
+    __name__,
+    template_folder='templates/blog',
+    url_prefix="/blog"
+)
 
 
 class User(db.Model):
@@ -82,7 +89,12 @@ def sidebar_data():
 
 
 @app.route('/')
-@app.route('/<int:page>')
+def index():
+    return redirect(url_for('blog.home'))
+
+
+@blog_blueprint.route('/')
+@blog_blueprint.route('/<int:page>')
 def home(page=1):  # put application's code here
     posts = Post.query.order_by(Post.publish_date.desc()).paginate(page, app.config.get('POSTS_PER_PAGE', 10), False)
     recent, top_tags = sidebar_data()
@@ -94,7 +106,7 @@ class CommentForm(Form):
     text = TextAreaField(u'Comment', validators=[DataRequired()])
 
 
-@app.route('/post/<int:post_id>', methods=('GET', 'POST'))
+@blog_blueprint.route('/post/<int:post_id>', methods=('GET', 'POST'))
 def post(post_id):
     form = CommentForm()
     if form.validate_on_submit():
@@ -110,7 +122,7 @@ def post(post_id):
             db.session.rollback()
         else:
             flash('Comment added', 'info')
-            return redirect(url_for('post', post_id=post_id))
+            return redirect(url_for('blog.post', post_id=post_id))
 
     post = Post.query.get_or_404(post_id)
     tags = post.tags
@@ -120,7 +132,7 @@ def post(post_id):
                            form=form)
 
 
-@app.route('/post_by_tag/<string:tag_name>')
+@blog_blueprint.route('/post_by_tag/<string:tag_name>')
 def posts_by_tag(tag_name):
     tag = Tag.query.filter_by(title=tag_name).first_or_404()
     posts = tag.posts.order_by(Post.publish_date.desc()).all()
@@ -128,7 +140,7 @@ def posts_by_tag(tag_name):
     return render_template('tag.html', tag=tag, posts=posts, recent=recent, top_tags=top_tags)
 
 
-@app.route('/posts_by_user/<string:username>')
+@blog_blueprint.route('/posts_by_user/<string:username>')
 def posts_by_user(username):
     user = User.query.filter_by(username=username).first_or_404()
     posts = user.posts.order_by(Post.publish_date.desc()).all()
@@ -159,6 +171,8 @@ class GenericListView(View):
 app.add_url_rule('/generic_posts', view_func=GenericListView.as_view('generic_posts', model=Post))
 app.add_url_rule('/generic_users', view_func=GenericListView.as_view('generic_users', model=User))
 app.add_url_rule('/generic_comments', view_func=GenericListView.as_view('generic_comments', model=Comment))
+
+app.register_blueprint(blog_blueprint)
 
 
 @app.errorhandler(404)

@@ -1,6 +1,7 @@
 import datetime
 
-from flask import Flask, render_template, flash, redirect, url_for
+from flask import Flask, render_template, flash, redirect, url_for, session
+from flask.views import View
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_wtf import FlaskForm as Form
@@ -83,7 +84,7 @@ def sidebar_data():
 @app.route('/')
 @app.route('/<int:page>')
 def home(page=1):  # put application's code here
-    posts = Post.query.order_by(Post.publish_date.desc()).paginate(page, app.config['POSTS_PER_PAGE'], False)
+    posts = Post.query.order_by(Post.publish_date.desc()).paginate(page, app.config.get('POSTS_PER_PAGE', 10), False)
     recent, top_tags = sidebar_data()
     return render_template('home.html', posts=posts, recent=recent, top_tags=top_tags)
 
@@ -133,6 +134,41 @@ def posts_by_user(username):
     posts = user.posts.order_by(Post.publish_date.desc()).all()
     recent, top_tags = sidebar_data()
     return render_template('user.html', user=user, posts=posts, recent=recent, top_tags=top_tags)
+
+
+class GenericListView(View):
+    def __init__(self, model, list_template='generic_list.html'):
+        self.model = model
+        self.list_template = list_template
+        self.columns = self.model.__mapper__.columns.keys()
+        # Call super python3 style
+        super(GenericListView, self).__init__()
+
+    def render_template(self, context):
+        return render_template(self.list_template, **context)
+
+    def get_objects(self):
+        return self.model.query.all()
+
+    def dispatch_request(self):
+        context = {'objects': self.get_objects(),
+                   'columns': self.columns}
+        return self.render_template(context)
+
+
+app.add_url_rule('/generic_posts', view_func=GenericListView.as_view('generic_posts', model=Post))
+app.add_url_rule('/generic_users', view_func=GenericListView.as_view('generic_users', model=User))
+app.add_url_rule('/generic_comments', view_func=GenericListView.as_view('generic_comments', model=Comment))
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template('404.html'), 404
+
+
+@app.before_request
+def before_request():
+    session['page_loads'] = session.get('page_loads', 0) + 1
 
 
 if __name__ == '__main__':

@@ -53,9 +53,8 @@
             </h1>
         </div>
         <div class="row">
-            <div class="col">
+            <div class="col text-justify">
                 {{ post.text | truncate(500) | safe }}
-                {#                {{ post.text | safe }}#}
                 <a href="{{ url_for('post',post_id=post.id) }}">Read More</a>
             </div>
         </div>
